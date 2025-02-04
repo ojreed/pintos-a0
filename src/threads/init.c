@@ -134,6 +134,31 @@ pintos_init (void)
     run_actions (argv);
   } else {
     // TODO: no command line passed to kernel. Run interactively 
+    while (true) {
+      printf("CS318>");
+      char cmd_buf[64] = "";
+      char ui_char[2] = {0};
+      while (true) {
+        ui_char[0] = input_getc();
+        if (ui_char[0] == '\n' || ui_char[0] == '\r') {
+          break;
+        }
+        strlcat(cmd_buf,ui_char,sizeof(cmd_buf));
+        putchar(ui_char[0]);
+      }
+      printf("\n");
+      if (strcmp(cmd_buf,"exit") == 0){
+        break;
+      } else if (strcmp(cmd_buf,"whoami") == 0){
+        printf("Owen James Reed\n");
+      } else {
+        printf("invalid command\n");
+      } 
+      
+      
+    }
+    
+
   }
 
   /* Finish up. */

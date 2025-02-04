@@ -1,0 +1,269 @@
+			+-------------------------+
+			|        CS 318           |
+			| PROJECT 0: Getting Real |
+			|     DESIGN DOCUMENT     |
+			+-------------------------+
+				   
+---- AUTHOR ----
+
+>> Fill in your name and email address.
+
+FirstName LastName <email@domain.example>
+
+---- PRELIMINARIES ----
+
+>> If you have any preliminary comments on your submission, notes for the
+>> TAs, or extra credit, please give them here.
+
+>> Please cite any offline or online sources you consulted while
+>> preparing your submission, other than the Pintos documentation, course
+>> text, lecture notes, and course staff.
+
+			     Booting Pintos
+			     ==============
+
+---- QUESTIONS ---- 
+>> Put the screenshots of Pintos running in src/p0.
+>> A1: Is there any particular issue that you would like us to know?
+
+			     Debugging
+			     =========
+
+---- QUESTIONS: BIOS ---- 
+>> B1: What is the first instruction that gets executed?
+
+ljmp   $0x3630,$0xf000e05b
+
+>> B2: At which physical address is this instruction located?
+
+f000:fff0
+
+>> B3: Can you guess why the first instruction is like this?
+
+That long jump moves to the start of the code from an arbitray space in memory because we may need to jump out of a code segment
+
+>> B4: What are the next three instructions?
+
+[f000:e05b]    0xfe05b: cmpw   $0xffc8,%cs:(%esi)
+[f000:e062]    0xfe062: jne    0xd241d076
+[f000:e066]    0xfe066: xor    %edx,%edx
+
+---- QUESTIONS: BOOTLOADER ---- 
+>> B5: How does the bootloader read disk sectors? In particular, what BIOS interrupt
+is used?
+
+In the read read_sector we use the command int $0x13 which corresponds to requesting disk services. 
+
+>> B6: How does the bootloader decides whether it successfully finds the Pintos kernel?
+
+the bootloader checks for something being a pintos kernel with the following code 
+
+```
+# Is it a Pintos kernel partition?
+cmpb $0x20, %es:4(%si) 
+jne next_partition
+```
+
+partition type 0x20 is used for pintos kernels so if we find %es:4(%si)==$0x20 we have found a target partition. 
+
+si stores the parition table offset 
+
+4(%si) gets us to the offset where parition type is stored
+
+es: correctly sets the buffer location
+
+>> B7: What happens when the bootloader could not find the Pintos kernel?
+
+If we fail to find a pintos kernel on a parition we skip to the next online
+
+If we check all partitions on a drive we check the next drive 
+
+If we check all the drive we conclude that there is no boot partition and call interupt 0x18 
+On some systems this will display an error that there is nothing to boot or it will begin using a BASIC bios.
+
+
+>> B8: At what point and how exactly does the bootloader transfer control to the Pintos kernel?
+
+Below is the section of code that transfers control to the pintos kernel 
+```
+
+#### Transfer control to the kernel that we loaded.  We read the start
+#### address out of the ELF header (see [ELF1]) and convert it from a
+#### 32-bit linear address into a 16:16 segment:offset address for
+#### real mode, then jump to the converted address.  The 80x86 doesn't
+#### have an instruction to jump to an absolute segment:offset kept in
+#### registers, so in fact we store the address in a temporary memory
+#### location, then jump indirectly through that location.  To save 4
+#### bytes in the loader, we reuse 4 bytes of the loader's code for
+#### this temporary pointer.
+
+        mov $0x2000, %ax
+        mov %ax, %es
+        mov %es:0x18, %dx
+        mov %dx, start
+        movw $0x2000, start + 2
+        ljmp *start
+
+```
+
+
+
+
+---- QUESTIONS: KERNEL ---- 
+>> B9: At the entry of pintos_init(), what is the value of expression 
+init_page_dir[pd_no(ptov(0))] in hexadecimal format?
+
+```
+(gdb) p/x init_page_dir[pd_no(ptov(0))]
+=> 0xc000efef:  int3
+=> 0xc000efef:  int3
+$2 = 0x0
+```
+
+>> B10: When palloc_get_page() is called for the first time,
+
+>> B10.1 what does the call stack look like?
+
+pre call:
+
+(gdb) bt
+#0  paging_init () at ../../threads/init.c:168
+#1  0xc002031b in pintos_init () at ../../threads/init.c:100
+#2  0xc002013d in start () at ../../threads/start.S:180
+
+(gdb) info locals
+pd = 0xc002e890
+pt = 0x800
+page = 3221456864
+
+
+post call:
+
+(gdb) bt
+#0  paging_init () at ../../threads/init.c:169
+#1  0xc002031b in pintos_init () at ../../threads/init.c:100
+#2  0xc002013d in start () at ../../threads/start.S:180
+
+
+pd = 0xc0101000
+pt = 0x800
+page = 3221456864
+
+
+
+>> B10.2 what is the return value in hexadecimal format?
+
+pre call:
+(gdb) p/x $ax
+$7 = 0x800
+
+
+post call:
+(gdb) p/x $ax
+$9 = 0x1000
+
+
+>> B10.3 what is the value of expression init_page_dir[pd_no(ptov(0))] in hexadecimal format?
+
+pre call:
+=> 0xc000ef9f:  int3
+=> 0xc000ef9f:  int3
+$3 = 0x0
+post call:
+=> 0xc000ef9f:  int3
+=> 0xc000ef9f:  int3
+$8 = 0x0
+
+
+>> B11: When palloc_get_page() is called for the third time,
+
+>> B11.1 what does the call stack look like?
+
+
+pre:
+(gdb) bt
+#0  palloc_get_page (flags=PAL_ZERO) at ../../threads/palloc.c:113
+#1  0xc0020a81 in thread_create (name=0xc002e895 "idle", priority=0, function=0xc0020eb0 <idle>, aux=0xc000efbc)
+    at ../../threads/thread.c:178
+#2  0xc0020976 in thread_start () at ../../threads/thread.c:111
+#3  0xc0020334 in pintos_init () at ../../threads/init.c:119
+#4  0xc002013d in start () at ../../threads/start.S:180
+
+
+(gdb) info locals
+paddr = 4096
+vaddr = 0xc0001000 ""
+pde_idx = 768
+pte_idx = 1
+in_kernel_text = false
+pd = 0xc0101000
+pt = 0xc0102000
+page = 1
+
+post:
+(gdb) bt
+#0  thread_create (name=0xc002e895 "idle", priority=0, function=0xc0020eb0 <idle>, aux=0xc000efbc)
+    at ../../threads/thread.c:179
+#1  0xc0020976 in thread_start () at ../../threads/thread.c:111
+#2  0xc0020334 in pintos_init () at ../../threads/init.c:119
+#3  0xc002013d in start () at ../../threads/start.S:180
+(gdb) info locals
+t = 0xc0103000
+kf = 0x1
+ef = 0xc000efc0
+sf = 0xc00227cc <sema_init+65>
+tid = 0
+__func__ = "thread_create"
+
+
+
+>> B11.2 what is the return value in hexadecimal format?
+
+pre:
+(gdb) p/x $ax
+$1 = 0xefbc
+
+post:
+(gdb) p/x $ax
+$3 = 0x3000
+
+
+>> B11.3 what is the value of expression init_page_dir[pd_no(ptov(0))] in hexadecimal format?
+
+pre:
+p/x init_page_dir[pd_no(ptov(0))]
+=> 0xc000ef3f:  int3
+=> 0xc000ef3f:  int3
+$2 = 0x102027
+
+post:
+
+(gdb) p/x init_page_dir[pd_no(ptov(0))]
+=> 0xc000ef5f:  int3
+=> 0xc000ef5f:  int3
+$4 = 0x102027
+
+
+			     Kernel Monitor
+			     ==============
+
+---- DATA STRUCTURES ----
+
+>> C1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+I did not create any new structs or complicated data structures. All I did for this was create a while loop and track an input buffer array. As the user types in new chars
+we append to this user input array to parse the command later.
+
+---- ALGORITHMS ----
+>> C2: Explain how you read and write to the console for the kernel monitor.
+I read from the kernel monitor with input_getc one char at a time. Each of these calls
+will cause a wait for the user to give input.
+
+I write to the monitor using printf for longer strings that I want displayed and using 
+putchar for each user inputted character so they are displayed live.
+
+
+>> C3: Any additional enhancement you implement?
+Nope it was a very busy week.
